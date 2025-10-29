@@ -1,0 +1,2 @@
+-- AlterTable
+ALTER TABLE "reservas" ALTER COLUMN "fecha" SET DATA TYPE TIMESTAMP(3);

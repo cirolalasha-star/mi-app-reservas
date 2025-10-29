@@ -1,0 +1,22 @@
+{
+  "terminal.integrated.defaultProfile.windows": "Git Bash",
+  "terminal.integrated.profiles.windows": {
+    "Git Bash": {
+      "path": "C:\\Program Files\\Git\\bin\\bash.exe",
+      "args": ["--login", "-i"]
+    }
+  },
+  "terminal.integrated.startupTasks": [
+    {
+      "task": "Servidor",
+      "name": "Servidor",
+      "splitMode": "none"
+    },
+    {
+      "task": "Comandos",
+      "name": "Comandos",
+      "splitMode": "right"
+    }
+  ],
+  "tasks.runOnFolderOpen": "Iniciar Todo"
+}

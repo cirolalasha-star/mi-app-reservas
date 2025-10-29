@@ -1,0 +1,189 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model usuarios {
+  id              Int            @id @default(autoincrement())
+  nombre          String         @db.VarChar(100)
+  email           String         @unique @db.VarChar(150)
+  telefono        String?        @db.VarChar(20)
+  foto_perfil_url String?
+  fecha_registro  DateTime       @default(now()) @db.Timestamp(6)
+  password        String         @db.VarChar(255)
+  rol             String         @default("usuario")
+  imagen_url      String?
+  guia_perfiles   guia_perfiles?
+  resenas         resenas[]
+  reservas        reservas[]
+  tours           tours[]
+}
+
+model tours {
+  id                   Int                   @id @default(autoincrement())
+  titulo               String                @db.VarChar(200)
+  descripcion          String?
+  ubicacion            String?               @db.VarChar(150)
+  latitud              Decimal?              @db.Decimal(9, 6)
+  longitud             Decimal?              @db.Decimal(9, 6)
+  duracion_dias        Int?
+  precio_base          Decimal?              @db.Decimal(10, 2)
+  dificultad           dificultad_tour       @default(baja)
+  cupo_maximo          Int?
+  imagen_url           String?
+  temporada_inicio_mes Int?                  @db.SmallInt
+  temporada_fin_mes    Int?                  @db.SmallInt
+  disponible           Boolean               @default(true)
+  guia_id              Int?
+  creado_en            DateTime              @default(now()) @db.Timestamp(6)
+  fotos_tour           fotos_tour[]
+  resenas              resenas[]
+  reservas             reservas[]
+  salidas_programadas  salidas_programadas[]
+  tour_categorias      tour_categorias[]
+  guia                 usuarios?             @relation(fields: [guia_id], references: [id], onUpdate: NoAction)
+  traducciones         traducciones[]
+
+  @@index([dificultad], map: "idx_tours_dificultad")
+  @@index([disponible], map: "idx_tours_disponible")
+  @@index([ubicacion], map: "idx_tours_ubicacion")
+}
+
+model traducciones {
+  id        Int      @id @default(autoincrement())
+  idioma    String
+  texto     String
+  creado_en DateTime @default(now())
+  tourId    Int?
+  tour      tours?   @relation(fields: [tourId], references: [id])
+}
+
+model reservas {
+  id                   Int                 @id @default(autoincrement())
+  usuario_id           Int
+  salida_programada_id Int
+  numero_personas      Int
+  estado               estado_reserva      @default(pendiente)
+  notas                String?
+  tour_id              Int
+  fecha                DateTime            @default(now())
+  salidas_programadas  salidas_programadas @relation(fields: [salida_programada_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  tour                 tours               @relation(fields: [tour_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  usuario              usuarios            @relation(fields: [usuario_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+
+  @@index([estado], map: "idx_reservas_estado")
+  @@index([salida_programada_id], map: "idx_reservas_salida")
+  @@index([usuario_id], map: "idx_reservas_usuario")
+}
+
+model resenas {
+  id         Int      @id @default(autoincrement())
+  usuario_id Int
+  tour_id    Int
+  puntuacion Int
+  comentario String
+  fecha      DateTime @default(now()) @db.Timestamp(6)
+  aprobado   Boolean  @default(false)
+  tour       tours    @relation(fields: [tour_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  usuario    usuarios @relation(fields: [usuario_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+
+  @@unique([usuario_id, tour_id])
+  @@index([tour_id], map: "idx_resenas_tour")
+}
+
+model categorias {
+  id              Int               @id @default(autoincrement())
+  nombre          String            @unique @db.VarChar(80)
+  tour_categorias tour_categorias[]
+}
+
+model fotos_tour {
+  id          Int     @id @default(autoincrement())
+  tour_id     Int
+  url_foto    String
+  descripcion String?
+  tours       tours   @relation(fields: [tour_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+
+  @@index([tour_id], map: "idx_fotos_tour")
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+model guia_perfiles {
+  id               Int      @id @default(autoincrement())
+  usuario_id       Int      @unique
+  bio              String?
+  especialidad     String?  @db.VarChar(120)
+  valoracion_media Decimal? @db.Decimal(3, 2)
+  usuarios         usuarios @relation(fields: [usuario_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+model ofertas {
+  id                   Int                 @id @default(autoincrement())
+  salida_programada_id Int
+  descripcion          String?
+  descuento_porcentaje Decimal?            @db.Decimal(5, 2)
+  descuento_importe    Decimal?            @db.Decimal(10, 2)
+  fecha_inicio         DateTime            @db.Date
+  fecha_fin            DateTime            @db.Date
+  activo               Boolean             @default(true)
+  salidas_programadas  salidas_programadas @relation(fields: [salida_programada_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+
+  @@index([salida_programada_id], map: "idx_ofertas_salida")
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+model salidas_programadas {
+  id              Int        @id @default(autoincrement())
+  tour_id         Int
+  fecha_inicio    DateTime   @db.Date
+  fecha_fin       DateTime   @db.Date
+  plazas_totales  Int
+  plazas_ocupadas Int        @default(0)
+  precio_especial Decimal?   @db.Decimal(10, 2)
+  activo          Boolean    @default(true)
+  ofertas         ofertas[]
+  reservas        reservas[]
+  tours           tours      @relation(fields: [tour_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+
+  @@index([fecha_inicio, fecha_fin], map: "idx_salidas_fechas")
+  @@index([tour_id], map: "idx_salidas_tour")
+}
+
+model suscriptores_boletin {
+  id                Int      @id @default(autoincrement())
+  email             String   @unique @db.VarChar(150)
+  fecha_suscripcion DateTime @default(now()) @db.Timestamp(6)
+  activo            Boolean  @default(true)
+}
+
+model tour_categorias {
+  tour_id      Int
+  categoria_id Int
+  categorias   categorias @relation(fields: [categoria_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  tours        tours      @relation(fields: [tour_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+
+  @@id([tour_id, categoria_id])
+}
+
+enum dificultad_tour {
+  baja
+  media
+  alta
+}
+
+enum estado_reserva {
+  pendiente
+  confirmada
+  cancelada
+}
+
+enum rol_usuario {
+  cliente
+  guia
+  admin
+}

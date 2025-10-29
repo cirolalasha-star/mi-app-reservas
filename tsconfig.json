@@ -1,0 +1,30 @@
+{
+  "compilerOptions": {
+    /* === Rutas de entrada y salida === */
+    "rootDir": "./src",              // Carpeta de entrada de mis archivos TS
+    "outDir": "./dist",              // Carpeta donde se guardarán los JS compilados
+
+    /* === Configuración del entorno === */
+    "target": "ES2020",              // Versión JS de salida (estable para Node)
+    "module": "commonjs",            // Sistema de módulos compatible con Node
+    "lib": ["ES2020"],               // Librerías base para Node
+    "types": ["node"],               // Reconoce tipos globales de Node.js
+
+    /* === Mapas y declaraciones === */
+    "sourceMap": true,               // Permite depurar TS en Node
+    "declaration": true,             // Genera archivos .d.ts
+    "declarationMap": true,
+
+    /* === Comprobaciones de tipo estrictas === */
+    "strict": true,
+    "noUncheckedIndexedAccess": true,
+    "exactOptionalPropertyTypes": true,
+
+    /* === Limpieza y rendimiento === */
+    "skipLibCheck": true,            // No revisa definiciones de librerías externas
+    "esModuleInterop": true,         // Facilita importar paquetes npm tipo commonjs
+    "forceConsistentCasingInFileNames": true
+  },
+  "include": ["src"],                // Archivos a compilar
+  "exclude": ["node_modules", "dist"] // Archivos a ignorar
+}

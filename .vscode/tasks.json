@@ -1,0 +1,32 @@
+{
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "label": "Servidor",
+      "type": "shell",
+      "command": "npm run dev",
+      "presentation": {
+        "reveal": "always",
+        "panel": "dedicated",
+        "group": "server"
+      },
+      "problemMatcher": []
+    },
+    {
+      "label": "Comandos",
+      "type": "shell",
+      "command": "echo Comandos listos...",
+      "presentation": {
+        "reveal": "always",
+        "panel": "new",
+        "group": "server"
+      },
+      "problemMatcher": []
+    },
+    {
+      "label": "Iniciar Todo",
+      "dependsOn": ["Servidor", "Comandos"],
+      "dependsOrder": "parallel"
+    }
+  ]
+}
