@@ -25,6 +25,12 @@
     "esModuleInterop": true,         // Facilita importar paquetes npm tipo commonjs
     "forceConsistentCasingInFileNames": true
   },
-  "include": ["src"],                // Archivos a compilar
-  "exclude": ["node_modules", "dist"] // Archivos a ignorar
+  "include": ["src/**/*.ts"],                // Archivos a compilar
+  "exclude": [
+    "node_modules", 
+    "dist",
+    "src/components",
+    "src/pages",
+    "src/hooks"
+    ] // Archivos a ignorar
 }
