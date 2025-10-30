@@ -1,8 +1,8 @@
 {
   "compilerOptions": {
     /* === Rutas de entrada y salida === */
-    "rootDir": "./src",              // Carpeta de entrada de mis archivos TS
-    "outDir": "./dist",              // Carpeta donde se guardarán los JS compilados
+    "rootDir": "src",              // Carpeta de entrada de mis archivos TS
+    "outDir": "dist",              // Carpeta donde se guardarán los JS compilados
 
     /* === Configuración del entorno === */
     "target": "ES2020",              // Versión JS de salida (estable para Node)
@@ -25,12 +25,20 @@
     "esModuleInterop": true,         // Facilita importar paquetes npm tipo commonjs
     "forceConsistentCasingInFileNames": true
   },
-  "include": ["src/**/*.ts"],                // Archivos a compilar
+  "include": [
+    "src/**/*.ts",
+    "src/controllers/**/*",
+    "src/routes/**/*",
+    "src/middleware/**/*",
+    "src/config/**/*",
+    "src/index.ts"
+    ],                // Archivos a compilar
   "exclude": [
     "node_modules", 
     "dist",
     "src/components",
     "src/pages",
-    "src/hooks"
+    "src/hooks",
+    "src/services/ai.services.ts"
     ] // Archivos a ignorar
 }
