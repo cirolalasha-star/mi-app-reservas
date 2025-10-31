@@ -13,16 +13,16 @@ export const traducirTour = async (req: Request, res: Response) => {
     const tour = await prisma.tours.findUnique({ where: { id: Number(id) } })
     if (!tour) return res.status(404).json({ message: "Tour no encontrado" })
 
-    const textoOriginal = tour.descripcion
-    const textoTraducido = await traducirTexto(textoOriginal, idioma)
+    const textoOriginal: string = tour.descripcion ?? "";
+    const textoTraducido = await traducirTexto(textoOriginal, idioma);
+
 
     // Guardamos la traducción en la tabla
     const nuevaTraduccion = await prisma.traducciones.create({
       data: {
         idioma,
         texto: textoTraducido,
-        entidad: "tour",
-        entidad_id: tour.id,
+        tourId: tour.id,
       },
     })
 
@@ -39,7 +39,7 @@ export const traducirTour = async (req: Request, res: Response) => {
 export const getTraduccionesTour = async (req: Request, res: Response) => {
     const { id } = req.params
     const traducciones = await prisma.traducciones.findMany({
-        where: { entidad: 'tour', entidad_id: Number(id) },
+        where: { tourId: Number(id) },
     })
     res.json(traducciones)
 }
