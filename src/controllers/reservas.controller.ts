@@ -79,7 +79,7 @@ export const createReserva = async (req: Request, res: Response) => {
 
     const usuario = nuevaReserva.usuario
     const tour = nuevaReserva.tour
-    const fecha = nuevaReserva.fecha_creacion
+    const fecha = nuevaReserva.fecha;
 
     // 📩 Enviar email al usuario
     if (usuario && tour) {

@@ -1,6 +1,6 @@
 import { PrismaClient } from '@prisma/client'
 import { Request, Response } from 'express'
-import { generarDescripcionTour } from '../services/ai.service'
+import { generarDescripcionTour } from '../services/ai.services'
 
 const prisma = new PrismaClient()
 
@@ -15,7 +15,7 @@ export const generarDescripcionAI = async (req: Request, res: Response) => {
     const nuevaDescripcion = await generarDescripcionTour(
       tour.titulo,
       tour.ubicacion || "Ubicación desconocida",
-      tour.temporada || "toda temporada"
+      `${tour.temporada_inicio_mes || '?'} a ${tour.temporada_fin_mes || '?'}`
     )
 
     const actualizado = await prisma.tours.update({

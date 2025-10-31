@@ -3,7 +3,7 @@ import { Request, Response } from 'express'
 
 const prisma = new PrismaClient()
 
-// 🔹 Estadísticas generales
+// 📊 Estadísticas generales del sistema
 export const getStats = async (_req: Request, res: Response) => {
   try {
     // 1️⃣ Total de usuarios
@@ -19,17 +19,26 @@ export const getStats = async (_req: Request, res: Response) => {
     const topTours = await prisma.tours.findMany({
       take: 5, // los 5 más reservados
       orderBy: { reservas: { _count: 'desc' } },
-      include: { _count: { select: { reservas: true } } },
+      include: {
+        _count: { select: { reservas: true } },
+        tour_categorias: { include: { categorias: true } },
+      },
     })
 
-    // 5️⃣ Ganancias estimadas (suma de precios de tours reservados)
+    // 5️⃣ Ganancias estimadas (suma de precios base de tours reservados)
     const ingresos = await prisma.reservas.findMany({
       include: { tour: true },
     })
-    const totalIngresos = ingresos.reduce((acc, r) => acc + (r.tour?.precio || 0), 0)
+
+    const totalIngresos = ingresos.reduce(
+      (acc, r) => acc + (Number(r.tour?.precio_base) || 0),
+      0
+    )
 
     // 6️⃣ Reservas por mes (últimos 6 meses)
-    const reservasMensuales = await prisma.$queryRaw`
+    const reservasMensuales = await prisma.$queryRaw<
+      { mes: string; total: number }[]
+    >`
       SELECT
         TO_CHAR(fecha, 'YYYY-MM') AS mes,
         COUNT(*)::int AS total
@@ -38,42 +47,37 @@ export const getStats = async (_req: Request, res: Response) => {
       ORDER BY mes DESC
       LIMIT 6;
     `
-    // Promedio reservas por usuario
+
+    // 7️⃣ Promedio de reservas por usuario
     const promedioReservas = totalReservas / (totalUsuarios || 1)
-    
-    //Tours sin reservas(para revisar)
+
+    // 8️⃣ Tours sin reservas
     const toursSinReservas = await prisma.tours.findMany({
-     where: { reservas: { none: {} } },
-     select: { id: true, titulo: true },
+      where: { reservas: { none: {} } },
+      select: { id: true, titulo: true },
     })
 
-    //Usuarios más activos
+    // 9️⃣ Usuarios más activos (más reservas)
     const usuariosActivos = await prisma.usuarios.findMany({
-        take: 3,
-        orderBy: { reservas: { _count: 'desc' } },
-        include: { _count: { select: { reservas: true } } },
+      take: 3,
+      orderBy: { reservas: { _count: 'desc' } },
+      include: { _count: { select: { reservas: true } } },
     })
 
-
-
+    // ✅ Respuesta final completa
     res.json({
       totalUsuarios,
       totalReservas,
       totalTours,
       totalIngresos,
-      topTours,
+      promedioReservas,
       reservasMensuales,
+      topTours,
+      toursSinReservas,
+      usuariosActivos,
     })
   } catch (error) {
-    console.error(error)
+    console.error("❌ Error en getStats:", error)
     res.status(500).json({ message: 'Error al obtener estadísticas' })
   }
 }
-
-/**
- * prisma.usuarios.count   Cuenta todos los usuarios registrados
- * prisma.tours.findMany   Devuelve los tours más reservados
- * include: {_count: {sekect:{rservas:true}}}  Cuenta cuántas reservas tiene cada tour
- * prisma.$queryRaw   Ejecuta SQL puro(ideal para agrupar por mes)
- * reduce    Suma los precios de todos los tours reservados para estimar ingresos totales
- */
