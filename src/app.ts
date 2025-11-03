@@ -91,6 +91,9 @@ app.use(
     }
 );
 
+app.get("/", (req, res) => {
+  res.send("✅ Servidor activo y corriendo en Render!");
+});
 
 export default app;
 /**
