@@ -1,106 +1,152 @@
-//src/app.ts/donde configuramos Express, sirve para define middlewares globales y monta las rutas en /api.
+// ===============================
+//  IMPORTS
+// ===============================
 import express from "express";
 import cors from "cors";
 import morgan from "morgan";
+import cookieParser from "cookie-parser";
 
-//rutas principales
-import apiRoutes from "./routes"; //importa el index.ts del folder routes
+// Rutas
 import adminRoutes from "./routes/admin.routes";
-import usuariosRoutes from './routes/usuarios.routes'
-import toursRoutes from './routes/tours.routes'
-import reservasRoutes from './routes/reservas.routes'
-import ofertasRoutes from './routes/ofertas.routes'
-import resenasRoutes from './routes/resenas.routes'
-import { health } from './controllers/health.controller'
-import authRoutes from './routes/auth.routes'
-import uploadRoutes from './routes/upload.routes'
-import statsRoutes from './routes/stats.routes'
-import traduccionesRoutes from './routes/traducciones.routes'
-import { timeStamp } from "console";
-
+import usuariosRoutes from "./routes/usuarios.routes";
+import toursRoutes from "./routes/tours.routes";
+import reservasRoutes from "./routes/reservas.routes";
+import ofertasRoutes from "./routes/ofertas.routes";
+import resenasRoutes from "./routes/resenas.routes";
+import authRoutes from "./routes/auth.routes";
+import uploadRoutes from "./routes/upload.routes";
+import statsRoutes from "./routes/stats.routes";
+import traduccionesRoutes from "./routes/traducciones.routes";
+import salidasRoutes from "./routes/salidas_programadas.routes";
 
 const app = express();
 
-//Middleware global: CORS + JSON
-//habilitar CORS para que cualquier frontend pueda hacer peticiones
-app.use(cors());
-// Middleware para parsear JSON
-app.use(express.json());
+// ===========================================
+// 1️⃣ COOKIES — Necesario para JWT con cookies
+// ===========================================
+app.use(cookieParser());
+// Ahora Express puede leer req.cookies["token"]
 
-//Configuración personalizada de CORS
+
+// ===========================================
+// 2️⃣ CORS CONFIG — NECESARIO PARA FRONTEND + COOKIES
+// ===========================================
+// OBLIGATORIO incluir tu dominio real de producción (Vercel)
 const allowedOrigins = [
-    "http://localhost:5173",  //Para desarrollo local
-    "https://mi-frontend.com"  // dominio de producción
+  "http://localhost:5173",                 // Desarrollo
+  "https://primalexperience.es",           // Tu dominio real
+  "https://www.primalexperience.es",
+  "https://primalexperience-frontend.vercel.app" // Frontend Vercel
 ];
 
 const corsOptions = {
-    origin: (origin: string | undefined, callback: any) => {
-        if (!origin || allowedOrigins.includes(origin)) {
-            callback(null, true);
-        }else{
-            callback(new Error("Origen no permitido por CORS"));
-        }
-    },
-    methods: ["GET", "POST", "PUT", "DELETE"],
-    allowedHeaders: ["Content-Type", "Authorization"],
-    credentials: true
+  origin: (origin: string | undefined, callback: any) => {
+    // Permite peticiones sin origin (como Postman)
+    if (!origin || allowedOrigins.includes(origin)) {
+      callback(null, true);
+    } else {
+      callback(new Error("Origen NO permitido por CORS"));
+    }
+  },
+  methods: ["GET", "POST", "PUT", "DELETE"],
+  allowedHeaders: ["Content-Type", "Authorization"],
+  credentials: true, // ⬅️ PERMITIR COOKIES
 };
 
-app.use("/admin", adminRoutes);
+app.use(cors(corsOptions));
 
-//Activar Morgan solo en desarrollo
-if (process.env.NODE_ENV !== "production"){
-    //Logger HTTP muestra las peticiones en consola
-    app.use(morgan("dev"));
+
+// ===========================================
+// 3️⃣ JSON BODY PARSER
+// ===========================================
+app.use(express.json());
+
+
+// ===========================================
+// 4️⃣ LOGS SOLO EN DESARROLLO
+// ===========================================
+if (process.env.NODE_ENV !== "production") {
+  app.use(morgan("dev"));
 }
 
-//Rutas
+
+// ===========================================
+// 5️⃣ RUTAS DE LA API
+// ===========================================
+
+// Ruta de prueba del servidor
 app.get('/api/health', (_req, res) => {
-    res.status(200).json({
-        status: "ok",
-        timeStamp: new Date().toISOString(),
-    });
+  res.status(200).json({
+    status: "ok",
+    timeStamp: new Date().toISOString(),
+  });
 });
-app.use('/api/usuarios', usuariosRoutes)
-app.use('/api/tours', toursRoutes)
-app.use('/api/reservas', reservasRoutes)
-app.use('/api/ofertas', ofertasRoutes)
-app.use('/api/resenas', resenasRoutes)
-app.use('/api/auth', authRoutes)
-app.use('/api', uploadRoutes)
-app.use('/api/admin/stats', statsRoutes)
-app.use('/api/traducciones', traduccionesRoutes)
 
-// Ruta de la API (todas colgando de /api)
-//app.use("/api", apiRoutes); ya no hace falta
+app.use('/api/auth', authRoutes);               // Login, registro, logout
+app.use('/api/usuarios', usuariosRoutes);
+app.use('/api/tours', toursRoutes);
+app.use('/api/reservas', reservasRoutes);
+app.use('/api/ofertas', ofertasRoutes);
+app.use('/api/resenas', resenasRoutes);
+app.use('/api/admin/stats', statsRoutes);
+app.use('/api/traducciones', traduccionesRoutes);
+app.use("/api/salidas_programadas", salidasRoutes);
+app.use('/api', uploadRoutes);
 
-// 404 para rutas no encontradas
+// Nota: ya NO usas apiRoutes porque ahora montas rutas individualmente
+
+
+// ===========================================
+// 6️⃣ 404 — RUTA NO ENCONTRADA
+// ===========================================
 app.use((req, res) => {
-    res.status(404).json({ error: "Recurso no encontrado"});
+  res.status(404).json({ error: "Recurso no encontrado" });
 });
 
-// Manejador de errores genérico
-// (si lanzas next(err) en alguna parte, llega aquí)
+
+// ===========================================
+// 7️⃣ MANEJADOR GLOBAL DE ERRORES
+// ===========================================
 app.use(
-    // eslint-disable-next-line @typescript-eslint/no-unused-vars
-    (err: any, _req: express.Request, res: express.Response, _next: express.NextFunction) => {
-        const status = err.status || 500;
-        res.status(status).json({
-            error: err.message || "Error interno del servidor",
-        });
-    }
+  (
+    err: any,
+    _req: express.Request,
+    res: express.Response,
+    _next: express.NextFunction
+  ) => {
+    const status = err.status || 500;
+    res.status(status).json({
+      error: err.message || "Error interno del servidor",
+    });
+  }
 );
 
+
+// ===========================================
+// 8️⃣ RUTA PRINCIPAL
+// ===========================================
 app.get("/", (req, res) => {
   res.send("✅ Servidor activo y corriendo en Render!");
 });
 
+
 export default app;
+
 /**
- * ·app.use(express.json()): permite recibir cuerpos JSON (como los que envías desde Postman)
- * ·app.use(cors()): habilita que tu frontend (React/Vite) haga peticiones a este backend
- * ·if (process.env.NODE_EMV !== "production"): evita logs innecesarios en producción
- * ·app.use('/api/...'): cada ruta monta su controlador
- * ·app.use((_req, res)=> {...}): captura rutas inexistentes (404)
- * ·app.use((err, ...)): último middleware, centraliza errores de toda la API
+ * 🔍 EXPLICACIÓN GENERAL
+ * 
+ * cookieParser(): permite leer/escribir cookies → necesario para JWT en cookies.
+ *
+ * cors(credentials: true): permite enviar cookies entre frontend y backend.
+ *
+ * allowedOrigins: lista de dominios permitidos (LOCAL + PRODUCCIÓN).
+ *
+ * express.json(): permite recibir JSON desde el frontend.
+ *
+ * morgan(): muestra logs solo en desarrollo.
+ *
+ * Todas las rutas se montan bajo /api.
+ *
+ * Manejador 404 + manejador centralizado de errores.
+ *
  */

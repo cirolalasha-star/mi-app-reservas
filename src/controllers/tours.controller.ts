@@ -182,24 +182,77 @@ export const getTours = async (_req: Request, res: Response) => {
   }
 }
 
+export const getToursDestacados = async (req: Request, res: Response) => {
+  try {
+    const tours = await prisma.tours.findMany({
+      where: { disponible: true },
+      orderBy: { creado_en: "desc" },
+      take: 6,
+    });
+
+    // SIN map, sin nada raro: devolvemos el objeto tal cual
+    res.json(tours);
+  } catch (error) {
+    console.error("Error getToursDestacados:", error);
+    res
+      .status(500)
+      .json({ message: "Error getToursDestacados" });
+  }
+};
+
 // ✅ Obtener un tour por ID
 export const getTourById = async (req: Request, res: Response) => {
   try {
-    const { id } = req.params
-    const tour = await prisma.tours.findUnique({
-      where: { id: Number(id) },
-      include: {
-        tour_categorias: { include: { categorias: true } }
-      }
-    })
+    const id = Number(req.params.id);
 
-    if (!tour) return res.status(404).json({ message: 'Tour no encontrado' })
-    res.json(tour)
+    const tour = await prisma.tours.findUnique({
+      where: { id },
+      include: {
+        salidas_programadas: true, // incluye las salidas
+        resenas: {
+          include: {
+            usuario: true, // solo si tienes relación con usuarios
+          },
+        },
+      },
+    });
+
+    if (!tour) {
+      return res.status(404).json({ message: "Tour no encontrado" });
+    }
+
+    // Opcional: mapear a la forma exacta que usa el frontend
+    const respuesta = {
+      id: tour.id,
+      titulo: tour.titulo,
+      descripcion: tour.descripcion,
+      ubicacion: tour.ubicacion,
+      latitud: tour.latitud,
+      longitud: tour.longitud,
+      duracion_dias: tour.duracion_dias,
+      precio_base: tour.precio_base,
+      dificultad: tour.dificultad,
+      cupo_maximo: tour.cupo_maximo,
+      imagen_url: tour.imagen_url,
+      salidas_programadas: tour.salidas_programadas,
+      resenas: tour.resenas.map((r: any) => ({
+      id: r.id,
+      usuario_nombre: r.usuario?.nombre ?? "Viajero",
+      comentario: r.comentario,
+      puntuacion: r.puntuacion,
+      creado_en: r.creado_en, // o el campo real que tengas
+      })),
+
+    };
+
+    res.json(respuesta);
   } catch (error) {
-    console.error(error)
-    res.status(500).json({ message: 'Error al obtener el tour' })
+    console.error("Error getTourById:", error);
+    res
+      .status(500)
+      .json({ message: "Error al obtener el tour" });
   }
-}
+};
 
 // ✅ Crear un nuevo tour
 export const createTourBasic = async (req: Request, res: Response) => {

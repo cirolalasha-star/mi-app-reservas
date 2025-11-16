@@ -1,13 +1,13 @@
 {
   "compilerOptions": {
-    /* === Rutas de entrada y salida === */
+    /* === Rutas de entrada y salida === (Organiza mi compilación)*/
     "rootDir": "src",              // Carpeta de entrada de mis archivos TS
     "outDir": "dist",              // Carpeta donde se guardarán los JS compilados
 
     /* === Configuración del entorno === */
     "target": "ES2020",              // Versión JS de salida (estable para Node)
-    "module": "commonjs",            // Sistema de módulos compatible con Node
-    "lib": ["ES2020"],               // Librerías base para Node
+    "module": "CommonJS",             // Sistema de módulos compatible con Node y Render
+    "lib": ["ES2020"],               // Librerías base para Node (same as module)
     "types": ["node"],               // Reconoce tipos globales de Node.js
 
     /* === Mapas y declaraciones === */
