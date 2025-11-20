@@ -2,38 +2,28 @@
 import { Router } from "express";
 import { register, login } from "../controllers/auth.controller";
 
+// Solo para ver que se carga el archivo al arrancar
+console.log("📁 auth.routes.ts cargado correctamente");
+
 const router = Router();
 
 /**
- * =====================================
- *   RUTAS DE AUTENTICACIÓN (PÚBLICAS)
- * =====================================
- *
- * En app.ts se montan así:
- *    app.use("/api/auth", authRoutes);
- *
- * Por tanto, los endpoints finales son:
- *    POST /api/auth/registro   → Registro de usuario
- *    POST /api/auth/login      → Login de usuario
- *
- * IMPORTANTE:
- *  - NO se usa protegerRuta aquí porque el usuario
- *    aún no tiene token cuando se registra o inicia sesión.
+ * ===============================
+ *   RUTAS DE AUTENTICACIÓN
+ * ===============================
+ * PÚBLICAS: NO llevan protegerRuta
  */
 
-// ✅ Registrar nuevo usuario
-//    Usado por el frontend en Registro.tsx → apiPost("/auth/registro", {...})
+// ✅ Alias en inglés (versión original)
+router.post("/register", register);
+
+// ✅ Alias en español (la que usa tu frontend ahora mismo)
 router.post("/registro", register);
 
-// ✅ Login de usuario — devuelve token JWT
-//    Usado por el frontend en Login.tsx → apiPost("/auth/login", {...})
+// Login de usuario
 router.post("/login", login);
 
-/**
- * Ruta de prueba sencilla para verificar que el módulo de auth
- * está montado correctamente:
- *    GET /api/auth/ping
- */
+// Ruta de prueba rápida
 router.get("/ping", (_req, res) => {
   res.json({ msg: "pong desde auth.routes.ts" });
 });
