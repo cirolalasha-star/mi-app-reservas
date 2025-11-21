@@ -1,9 +1,11 @@
 // src/controllers/auth.controller.ts
 
 /**
- * · Usa cookies HTTP-only, seguras, preparadas para Vercel + Render
- * · Además devuelve el token en el JSON (para el frontend)
- * · Incluye login, register, logout y me
+ * Controlador de autenticación:
+ * - register: crea usuario, manda email, genera JWT y lo guarda en cookie + JSON
+ * - login: verifica credenciales, genera JWT y lo guarda en cookie + JSON
+ * - me: devuelve el usuario actual a partir del token
+ * - logout: borra la cookie
  */
 
 import { PrismaClient } from "@prisma/client";
@@ -14,7 +16,7 @@ import { sendEmail } from "../services/email.service";
 
 const prisma = new PrismaClient();
 
-// Clave secreta (siempre debe venir del entorno)
+// ⚠️ En producción, asegura que JWT_SECRET viene del entorno
 const JWT_SECRET = process.env.JWT_SECRET || "CAMBIAR_SECRET_EN_PRODUCCION";
 
 /**
@@ -33,7 +35,7 @@ function generarJWT(id: number, rol: string) {
  */
 export const register = async (req: Request, res: Response) => {
   try {
-    console.log("📩 Petición recibida en /api/auth/registro");
+    console.log("📩 Petición recibida en /api/auth/register");
 
     const { nombre, email, password, rol } = req.body;
 
@@ -61,7 +63,7 @@ export const register = async (req: Request, res: Response) => {
       },
     });
 
-    // 5. Enviar email de bienvenida (async pero sin bloquear respuesta)
+    // 5. Enviar email de bienvenida (no bloquea la respuesta)
     sendEmail({
       to: email,
       subject: "🎉 Bienvenido a Primal Experience Reservas",
@@ -176,13 +178,14 @@ interface TokenPayload {
  */
 export const me = async (req: Request, res: Response) => {
   try {
-    // 1) Sacar token de Authorization o de cookie
     let token: string | undefined;
 
+    // 1) Token desde Authorization: Bearer xxx
     const authHeader = req.headers.authorization;
     if (authHeader?.startsWith("Bearer ")) {
       token = authHeader.substring(7);
     } else if ((req as any).cookies?.token) {
+      // 2) O desde la cookie "token"
       token = (req as any).cookies.token;
     }
 
@@ -190,10 +193,10 @@ export const me = async (req: Request, res: Response) => {
       return res.status(401).json({ message: "No hay token de autenticación." });
     }
 
-    // 2) Verificar token
+    // 3) Verificar token
     const decoded = jwt.verify(token, JWT_SECRET) as TokenPayload;
 
-    // 3) Buscar usuario en BD
+    // 4) Buscar usuario en BD
     const usuario = await prisma.usuarios.findUnique({
       where: { id: decoded.id },
       select: {
@@ -208,7 +211,7 @@ export const me = async (req: Request, res: Response) => {
       return res.status(404).json({ message: "Usuario no encontrado." });
     }
 
-    // 4) Devolver usuario actual
+    // 5) Devolver usuario actual
     return res.json({ usuario });
   } catch (error) {
     console.error("❌ Error en me:", error);
