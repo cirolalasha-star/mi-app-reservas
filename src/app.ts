@@ -45,10 +45,15 @@ const corsOptions: CorsOptions = {
   credentials: true,                            // Permite cookies/credenciales
 };
 
+// Aplica CORS a TODAS las rutas
 app.use(cors(corsOptions));
 
-// 🔥 Asegura que TODAS las rutas respondan al preflight OPTIONS
-app.options("*", cors(corsOptions));
+// ⚠️ IMPORTANTE:
+// Antes teníamos: app.options("*", cors(corsOptions));
+// Esto rompe con path-to-regexp v8 (lanzaba "Missing parameter name at index 1: *")
+// La eliminamos porque con app.use(cors(...)) ya se responden los preflight
+// para las rutas reales.
+// ❌ app.options("*", cors(corsOptions));
 
 // ===========================================
 // 3️⃣ JSON BODY PARSER
@@ -63,8 +68,15 @@ if (process.env.NODE_ENV !== "production") {
 }
 
 // ===========================================
-// 5️⃣ RUTAS DE LA API
+// 5️⃣ RUTAS PRINCIPALES Y DE API
 // ===========================================
+
+// 🔹 Ruta raíz simple para comprobar que el servidor vive
+app.get("/", (_req, res) => {
+  res.send("✅ Servidor activo y corriendo en Render!");
+});
+
+// Ruta de salud de la API
 app.get("/api/health", (_req, res) => {
   res.status(200).json({
     status: "ok",
@@ -72,6 +84,7 @@ app.get("/api/health", (_req, res) => {
   });
 });
 
+// Rutas de negocio
 app.use("/api/auth", authRoutes);
 app.use("/api/usuarios", usuariosRoutes);
 app.use("/api/tours", toursRoutes);
@@ -86,6 +99,7 @@ app.use("/api", uploadRoutes);
 // ===========================================
 // 6️⃣ 404 — RUTA NO ENCONTRADA
 // ===========================================
+// ⬅️ Esta debe ir después de TODAS las rutas .use() / .get() / etc.
 app.use((req, res) => {
   res.status(404).json({ error: "Recurso no encontrado" });
 });
@@ -93,6 +107,7 @@ app.use((req, res) => {
 // ===========================================
 // 7️⃣ MANEJADOR GLOBAL DE ERRORES
 // ===========================================
+// ⬅️ Este SIEMPRE el último middleware
 app.use(
   (
     err: any,
@@ -106,12 +121,5 @@ app.use(
     });
   }
 );
-
-// ===========================================
-// 8️⃣ RUTA PRINCIPAL
-// ===========================================
-app.get("/", (_req, res) => {
-  res.send("✅ Servidor activo y corriendo en Render!");
-});
 
 export default app;
