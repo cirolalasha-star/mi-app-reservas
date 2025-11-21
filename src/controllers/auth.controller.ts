@@ -1,10 +1,11 @@
+// src/controllers/auth.controller.ts
+
 /**
- * ·Usa cookies HTTP-only, seguras, preparadas para Vercel + Render
- * ·El frontend ya NO necesita guardar token en localSTorage
- * ·login, register y logout redondos
- * ·Seguridad REAL con samSite: "none" y secure: true
- * ·Codigo limpio, estructurado y explicado
+ * · Usa cookies HTTP-only, seguras, preparadas para Vercel + Render
+ * · Además devuelve el token en el JSON (para el frontend)
+ * · Incluye login, register, logout y me
  */
+
 import { PrismaClient } from "@prisma/client";
 import { Request, Response } from "express";
 import bcrypt from "bcryptjs";
@@ -82,9 +83,10 @@ export const register = async (req: Request, res: Response) => {
       maxAge: 7 * 24 * 60 * 60 * 1000, // 7 días
     });
 
-    // 8. Respuesta
+    // 8. Respuesta (AHORA incluye token para el frontend)
     return res.status(201).json({
       message: "Usuario registrado con éxito",
+      token, // ⬅️ añadido
       usuario: {
         id: nuevoUsuario.id,
         nombre,
@@ -135,9 +137,10 @@ export const login = async (req: Request, res: Response) => {
       maxAge: 7 * 24 * 60 * 60 * 1000,
     });
 
-    // 6. Respuesta
+    // 6. Respuesta (AHORA incluye token para el frontend)
     return res.json({
       message: "Inicio de sesión exitoso",
+      token, // ⬅️ añadido
       usuario: {
         id: usuario.id,
         nombre: usuario.nombre,
@@ -169,5 +172,52 @@ export const logout = async (_req: Request, res: Response) => {
   } catch (err) {
     console.error("❌ Error en logout:", err);
     return res.status(500).json({ message: "Error al cerrar sesión." });
+  }
+};
+
+/**
+ * ============================
+ *  ME (USUARIO ACTUAL)
+ * ============================
+ * Usa el token que venga en:
+ * - Authorization: Bearer xxx  (frontend actual)
+ * - o en cookie "token" (por si lo necesitas en el futuro)
+ */
+export const me = async (req: Request, res: Response) => {
+  try {
+    const authHeader = req.headers.authorization;
+    const tokenHeader =
+      authHeader && authHeader.startsWith("Bearer ")
+        ? authHeader.split(" ")[1]
+        : null;
+
+    const tokenCookie = (req as any).cookies?.token as string | undefined;
+
+    const token = tokenHeader || tokenCookie;
+
+    if (!token) {
+      return res.status(401).json({ message: "No autenticado." });
+    }
+
+    const decoded = jwt.verify(token, JWT_SECRET) as { id: number; rol: string };
+
+    const usuario = await prisma.usuarios.findUnique({
+      where: { id: decoded.id },
+      select: {
+        id: true,
+        nombre: true,
+        email: true,
+        rol: true,
+      },
+    });
+
+    if (!usuario) {
+      return res.status(404).json({ message: "Usuario no encontrado." });
+    }
+
+    return res.json({ usuario });
+  } catch (error) {
+    console.error("❌ Error en me:", error);
+    return res.status(401).json({ message: "Token inválido o expirado." });
   }
 };

@@ -1,9 +1,11 @@
 // src/routes/auth.routes.ts
 import { Router } from "express";
-import { register, login } from "../controllers/auth.controller";
+import { register, login, me } from "../controllers/auth.controller";
+import { protegerRuta } from "../middleware/auth.middleware";
 
-// Solo para ver que se carga el archivo al arrancar
+// Logs para confirmar carga correcta del archivo
 console.log("📁 auth.routes.ts cargado correctamente");
+console.log("➡️ auth.controller importado correctamente");
 
 const router = Router();
 
@@ -11,19 +13,25 @@ const router = Router();
  * ===============================
  *   RUTAS DE AUTENTICACIÓN
  * ===============================
- * PÚBLICAS: NO llevan protegerRuta
+ * Estas rutas son PÚBLICAS salvo /me.
  */
 
-// ✅ Alias en inglés (versión original)
+// Registrar nuevo usuario
+// POST /api/auth/register
 router.post("/register", register);
 
-// ✅ Alias en español (la que usa tu frontend ahora mismo)
-router.post("/registro", register);
-
-// Login de usuario
+// Login de usuario — devuelve token JWT
+// POST /api/auth/login
 router.post("/login", login);
 
-// Ruta de prueba rápida
+// Perfil del usuario autenticado
+// GET /api/auth/me  (requiere token Bearer)
+router.get("/me", protegerRuta, me);
+
+/**
+ * Ruta de prueba para verificar que el módulo funciona.
+ * No tiene utilidad real en producción, pero sirve para debug.
+ */
 router.get("/ping", (_req, res) => {
   res.json({ msg: "pong desde auth.routes.ts" });
 });
