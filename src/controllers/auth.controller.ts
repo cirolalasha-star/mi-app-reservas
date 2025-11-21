@@ -33,7 +33,7 @@ function generarJWT(id: number, rol: string) {
  */
 export const register = async (req: Request, res: Response) => {
   try {
-    console.log("📩 Petición recibida en /api/auth/register");
+    console.log("📩 Petición recibida en /api/auth/registro");
 
     const { nombre, email, password, rol } = req.body;
 
@@ -83,16 +83,16 @@ export const register = async (req: Request, res: Response) => {
       maxAge: 7 * 24 * 60 * 60 * 1000, // 7 días
     });
 
-    // 8. Respuesta (AHORA incluye token para el frontend)
+    // 8. Respuesta (incluye token para el frontend)
     return res.status(201).json({
       message: "Usuario registrado con éxito",
-      token, // ⬅️ añadido
       usuario: {
         id: nuevoUsuario.id,
         nombre,
         email,
         rol: nuevoUsuario.rol,
       },
+      token, // ⬅️ token en el JSON
     });
   } catch (error) {
     console.error("❌ Error en register:", error);
@@ -137,20 +137,82 @@ export const login = async (req: Request, res: Response) => {
       maxAge: 7 * 24 * 60 * 60 * 1000,
     });
 
-    // 6. Respuesta (AHORA incluye token para el frontend)
+    // 6. Respuesta (incluye token para el frontend)
     return res.json({
       message: "Inicio de sesión exitoso",
-      token, // ⬅️ añadido
       usuario: {
         id: usuario.id,
         nombre: usuario.nombre,
         email: usuario.email,
         rol: usuario.rol,
       },
+      token, // ⬅️ token también aquí
     });
   } catch (error) {
     console.error("❌ Error en login:", error);
     return res.status(500).json({ message: "Error al iniciar sesión." });
+  }
+};
+
+/**
+ * ============================
+ *  TIPO DEL PAYLOAD DEL TOKEN
+ * ============================
+ */
+interface TokenPayload {
+  id: number;
+  rol: string;
+  iat: number;
+  exp: number;
+}
+
+/**
+ * ============================
+ *  ME (USUARIO ACTUAL)
+ * ============================
+ * Usa el token que venga en:
+ * - Authorization: Bearer xxx  (frontend actual)
+ * - o en cookie "token"
+ */
+export const me = async (req: Request, res: Response) => {
+  try {
+    // 1) Sacar token de Authorization o de cookie
+    let token: string | undefined;
+
+    const authHeader = req.headers.authorization;
+    if (authHeader?.startsWith("Bearer ")) {
+      token = authHeader.substring(7);
+    } else if ((req as any).cookies?.token) {
+      token = (req as any).cookies.token;
+    }
+
+    if (!token) {
+      return res.status(401).json({ message: "No hay token de autenticación." });
+    }
+
+    // 2) Verificar token
+    const decoded = jwt.verify(token, JWT_SECRET) as TokenPayload;
+
+    // 3) Buscar usuario en BD
+    const usuario = await prisma.usuarios.findUnique({
+      where: { id: decoded.id },
+      select: {
+        id: true,
+        nombre: true,
+        email: true,
+        rol: true,
+      },
+    });
+
+    if (!usuario) {
+      return res.status(404).json({ message: "Usuario no encontrado." });
+    }
+
+    // 4) Devolver usuario actual
+    return res.json({ usuario });
+  } catch (error) {
+    console.error("❌ Error en me:", error);
+    return res.status(401).json({ message: "Token inválido o expirado." });
   }
 };
 
@@ -169,55 +231,8 @@ export const logout = async (_req: Request, res: Response) => {
     });
 
     return res.json({ message: "Sesión cerrada correctamente." });
-  } catch (err) {
-    console.error("❌ Error en logout:", err);
-    return res.status(500).json({ message: "Error al cerrar sesión." });
-  }
-};
-
-/**
- * ============================
- *  ME (USUARIO ACTUAL)
- * ============================
- * Usa el token que venga en:
- * - Authorization: Bearer xxx  (frontend actual)
- * - o en cookie "token" (por si lo necesitas en el futuro)
- */
-export const me = async (req: Request, res: Response) => {
-  try {
-    const authHeader = req.headers.authorization;
-    const tokenHeader =
-      authHeader && authHeader.startsWith("Bearer ")
-        ? authHeader.split(" ")[1]
-        : null;
-
-    const tokenCookie = (req as any).cookies?.token as string | undefined;
-
-    const token = tokenHeader || tokenCookie;
-
-    if (!token) {
-      return res.status(401).json({ message: "No autenticado." });
-    }
-
-    const decoded = jwt.verify(token, JWT_SECRET) as { id: number; rol: string };
-
-    const usuario = await prisma.usuarios.findUnique({
-      where: { id: decoded.id },
-      select: {
-        id: true,
-        nombre: true,
-        email: true,
-        rol: true,
-      },
-    });
-
-    if (!usuario) {
-      return res.status(404).json({ message: "Usuario no encontrado." });
-    }
-
-    return res.json({ usuario });
   } catch (error) {
-    console.error("❌ Error en me:", error);
-    return res.status(401).json({ message: "Token inválido o expirado." });
+    console.error("❌ Error en logout:", error);
+    return res.status(500).json({ message: "Error al cerrar sesión." });
   }
 };
