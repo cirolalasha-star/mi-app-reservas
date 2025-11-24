@@ -8,6 +8,7 @@ import {
 } from "../controllers/reservas.controller";
 
 import { protegerRuta } from "../middleware/auth.middleware";
+import { misReservas } from "../controllers/reservas.controller";
 
 const router = Router();
 
@@ -18,5 +19,7 @@ router.get("/", protegerRuta, getReservas);
 router.get("/:id", protegerRuta, getReservaById);
 router.post("/", protegerRuta, createReserva);
 router.delete("/:id", protegerRuta, deleteReserva);
+// Lista SOLO las reservas del usuario autenticado
+router.get("/mias", misReservas);
 
 export default router;
