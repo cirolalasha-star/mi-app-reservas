@@ -119,35 +119,51 @@ export const getMisReservas = async (req: Request, res: Response) => {
 
 /**
  * ====================================
- *  CREAR RESERVA
+ *  CREAR RESERVA (usa usuario del JWT)
  * ====================================
  */
 export const createReserva = async (req: Request, res: Response) => {
   try {
+    // 1) Sacar token igual que en getMisReservas
+    const authHeader = req.headers.authorization;
+    const tokenHeader =
+      authHeader && authHeader.startsWith("Bearer ")
+        ? authHeader.split(" ")[1]
+        : null;
+
+    const tokenCookie = (req as any).cookies?.token as string | undefined;
+    const token = tokenHeader || tokenCookie;
+
+    if (!token) {
+      return res.status(401).json({ message: "No autenticado." });
+    }
+
+    const decoded = jwt.verify(token, JWT_SECRET) as TokenPayload;
+    const usuarioId = decoded.id; // 👈 este es el usuario real
+
+    // 2) Datos que SÍ vienen en el body
     const {
-      usuario_id,
       tour_id,
-      salida_programada_id, // 👈 nombre correcto del campo
+      salida_programada_id, // 👈 id de la salida concreta
       numero_personas,
       notas,
     } = req.body;
 
-    // Validación mínima
-    if (!usuario_id || !tour_id || !salida_programada_id || !numero_personas) {
+    // 3) Validación mínima
+    if (!tour_id || !salida_programada_id || !numero_personas) {
       return res.status(400).json({ message: "Faltan campos obligatorios" });
     }
 
+    // 4) Crear reserva en BD
     const nuevaReserva = await prisma.reservas.create({
       data: {
-        // 👇 importantes los nombres EXACTOS de los campos del modelo
-        usuario_id: Number(usuario_id),
+        usuario_id: Number(usuarioId),              // 👈 viene del token
         tour_id: Number(tour_id),
         salida_programada_id: Number(salida_programada_id),
         numero_personas: Number(numero_personas),
         notas: notas ?? null,
       },
       include: {
-        // 👇 AQUÍ estaba el error: es `usuario`, no `usuarios`
         usuario: true,
         salidas_programadas: {
           include: {
@@ -157,7 +173,7 @@ export const createReserva = async (req: Request, res: Response) => {
       },
     });
 
-    // Para no pelear con tipos de Prisma, casteamos a any sólo para el email
+    // 5) Para emails, casteamos a any para no pelearnos con tipos
     const reservaConRelaciones = nuevaReserva as any;
     const usuario = reservaConRelaciones.usuario;
     const salida = reservaConRelaciones.salidas_programadas;
