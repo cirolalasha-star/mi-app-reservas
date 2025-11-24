@@ -3,23 +3,31 @@ import { Router } from "express";
 import {
   getReservas,
   getReservaById,
+  getMisReservas,
   createReserva,
   deleteReserva,
 } from "../controllers/reservas.controller";
-
 import { protegerRuta } from "../middleware/auth.middleware";
-import { misReservas } from "../controllers/reservas.controller";
 
 const router = Router();
 
 /**
- * Todas las rutas de reservas son privadas → requieren token válido
+ * Orden MUY importante:
+ * - Primero rutas "especiales" como /mias
+ * - Luego las genéricas con parámetros (/:id)
  */
-router.get("/", protegerRuta, getReservas);
-router.get("/:id", protegerRuta, getReservaById);
+
+// 👤 Reservas del usuario logado
+router.get("/mias", protegerRuta, getMisReservas);
+
+// Listado general (admin / futuras vistas)
+router.get("/", getReservas);
+
+// Detalle por id
+router.get("/:id", getReservaById);
+
+// Crear / borrar (normalmente protegidas)
 router.post("/", protegerRuta, createReserva);
 router.delete("/:id", protegerRuta, deleteReserva);
-// Lista SOLO las reservas del usuario autenticado
-router.get("/mias", misReservas);
 
 export default router;

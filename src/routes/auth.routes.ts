@@ -1,25 +1,31 @@
+// src/routes/auth.routes.ts
 import { Router } from "express";
-import { register, login, logout, me } from "../controllers/auth.controller";
+import { register, login, me, logout } from "../controllers/auth.controller";
+
+console.log("📁 auth.routes.ts cargado correctamente");
 
 const router = Router();
 
 /**
- * Rutas de autenticación (públicas para login/registro)
+ * ===============================
+ *   RUTAS DE AUTENTICACIÓN
+ * ===============================
+ * Estas rutas son PÚBLICAS (excepto /me, que requiere token)
  */
 
 // Registrar nuevo usuario
-router.post("/register", register);
+router.post("/registro", register);   // POST /api/auth/registro
 
-// Login de usuario
-router.post("/login", login);
+// Login de usuario — devuelve token JWT
+router.post("/login", login);        // POST /api/auth/login
 
-// Usuario actual
-router.get("/me", me);
+// Usuario actual (usa token enviado en Authorization: Bearer xxx)
+router.get("/me", me);               // GET /api/auth/me
 
-// Logout (opcional, si la usas)
-router.post("/logout", logout);
+// Logout — limpia cookie (y opcionalmente podrías invalidar token en servidor)
+router.post("/logout", logout);      // POST /api/auth/logout
 
-// Ruta de prueba
+// Ruta de prueba para verificar que el módulo funciona
 router.get("/ping", (_req, res) => {
   res.json({ msg: "pong desde auth.routes.ts" });
 });

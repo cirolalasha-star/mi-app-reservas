@@ -1,58 +1,87 @@
-import { Request, Response, NextFunction } from "express"
-import { JwtPayload } from "jsonwebtoken"
-import { verificarToken } from "../services/auth.service"
+// src/middlewares/auth.middleware.ts
+/**
+ * Middleware de autenticación:
+ *  - Lee el token JWT desde:
+ *      · Authorization: Bearer xxx
+ *      · o cookie "token"
+ *  - Si es válido, añade `req.usuarioId` y `req.usuarioRol`
+ *  - Si no, responde 401 (no autenticado)
+ */
 
-// Tipo del token decodificado
-interface DecodedToken extends JwtPayload {
-  id: number
-  rol: string
+import type { Request, Response, NextFunction } from "express";
+import jwt from "jsonwebtoken";
+
+const JWT_SECRET = process.env.JWT_SECRET || "CAMBIAR_SECRET_EN_PRODUCCION";
+
+interface TokenPayload {
+  id: number;
+  rol: string;
+  iat: number;
+  exp: number;
 }
 
-// Extendemos Request para incluir el usuario autenticado
-interface AuthRequest extends Request {
-  usuario?: DecodedToken
+// 🔧 Extendemos el tipo Request para guardar los datos del usuario
+declare module "express-serve-static-core" {
+  interface Request {
+    usuarioId?: number;
+    usuarioRol?: string;
+  }
 }
 
-// ✅ Middleware general para proteger rutas
-export const protegerRuta = (req: AuthRequest, res: Response, next: NextFunction) => {
-  const authHeader = req.headers.authorization
+export function protegerRuta(req: Request, res: Response, next: NextFunction) {
+  try {
+    let token: string | undefined;
 
-  // Verificamos que el encabezado Authorization exista y empiece con "Bearer"
-  if (!authHeader || !authHeader.startsWith("Bearer ")) {
-    return res.status(401).json({ message: "Token no proporcionado" })
+    // 1) Intentamos leer Authorization: Bearer xxx
+    const authHeader = req.headers.authorization;
+    if (authHeader?.startsWith("Bearer ")) {
+      token = authHeader.substring(7);
+    }
+
+    // 2) Si no hay header, probamos con cookie "token"
+    if (!token && (req as any).cookies?.token) {
+      token = (req as any).cookies.token;
+    }
+
+    if (!token) {
+      return res.status(401).json({ message: "No autenticado. Falta token." });
+    }
+
+    // 3) Verificamos token
+    const decoded = jwt.verify(token, JWT_SECRET) as TokenPayload;
+
+    // 4) Guardamos info en req para usarla en los controladores
+    req.usuarioId = decoded.id;
+    req.usuarioRol = decoded.rol;
+
+    return next();
+  } catch (error) {
+    console.error("❌ Error en protegerRuta:", error);
+    return res.status(401).json({ message: "Token inválido o expirado." });
   }
-
-  // Extraemos el token (parte después de "Bearer ")
-  const token = authHeader.split(" ")[1]
-
-  // ⚠️ Nueva comprobación: evita pasar undefined a verificarToken()
-  if (!token) {
-    return res.status(401).json({ message: "Token no proporcionado o mal formado" })
-  }
-
-  // Verificamos el token
-  const payload = verificarToken(token) as DecodedToken | null
-
-  // Si el token no es válido o expiró
-  if (!payload) {
-    return res.status(403).json({ message: "Token inválido o expirado" })
-  }
-
-  // Guardamos los datos del usuario en la request
-  req.usuario = payload
-  next()
-}
-
-
-// ✅ Middleware específico solo para administradores
-export const soloAdmin = (req: AuthRequest, res: Response, next: NextFunction) => {
-  if (!req.usuario || req.usuario.rol !== "admin") {
-    return res.status(403).json({ message: "Acceso solo para administradores" })
-  }
-  next()
 }
 /**
- * protegerRuta  Verifica si el token JWT es válido antes de acceder
- * soloAdmin     Permite acceso solo a usuarios con rol: admin
- * (req as any).usuario  Guarda los datos decodificados del token en la request
+ * Middleware para proteger rutas (probablemente ya lo tienes)
+ * export const protegerRuta = ...
  */
+
+/**
+ * 🔐 SOLO ADMIN
+ * Debe ir después de protegerRuta en las rutas:
+ *   router.get("/algo", protegerRuta, soloAdmin, handler)
+ */
+export const soloAdmin = (req: Request, res: Response, next: NextFunction) => {
+  const usuario = (req as any).usuario;
+
+  if (!usuario) {
+    return res.status(401).json({ message: "No autenticado." });
+  }
+
+  if (usuario.rol !== "admin") {
+    return res
+      .status(403)
+      .json({ message: "Acceso reservado a administradores." });
+  }
+
+  return next();
+};
