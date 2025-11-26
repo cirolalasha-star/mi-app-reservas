@@ -6,8 +6,9 @@ import {
   getMisReservas,
   createReserva,
   deleteReserva,
+  updateReservaEstado,
 } from "../controllers/reservas.controller";
-import { protegerRuta } from "../middleware/auth.middleware";
+import { protegerRuta, soloAdmin } from "../middleware/auth.middleware";
 
 const router = Router();
 
@@ -20,14 +21,19 @@ const router = Router();
 // 👤 Reservas del usuario logado
 router.get("/mias", protegerRuta, getMisReservas);
 
-// Listado general (admin / futuras vistas)
-router.get("/", getReservas);
+// 📋 Listado general (solo admin, para el panel)
+router.get("/", protegerRuta, soloAdmin, getReservas);
 
-// Detalle por id
-router.get("/:id", getReservaById);
+// 🔎 Detalle por id (también solo admin)
+router.get("/:id", protegerRuta, soloAdmin, getReservaById);
 
-// Crear / borrar (normalmente protegidas)
+// ➕ Crear reserva (usuario logado)
 router.post("/", protegerRuta, createReserva);
-router.delete("/:id", protegerRuta, deleteReserva);
+
+// 🔁 Cambiar estado de una reserva (pendiente/confirmada/cancelada) – solo admin
+router.patch("/:id/estado", protegerRuta, soloAdmin, updateReservaEstado);
+
+// 🗑 Eliminar reserva (solo admin)
+router.delete("/:id", protegerRuta, soloAdmin, deleteReserva);
 
 export default router;

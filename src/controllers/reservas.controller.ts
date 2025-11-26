@@ -1,5 +1,5 @@
 // src/controllers/reservas.controller.ts
-import { PrismaClient } from "@prisma/client";
+import { PrismaClient, estado_reserva } from "@prisma/client";
 import { Request, Response } from "express";
 import { sendEmail } from "../services/email.service";
 import jwt from "jsonwebtoken";
@@ -144,19 +144,17 @@ export const createReserva = async (req: Request, res: Response) => {
     // 2) Datos que vienen en el body
     const {
       tour_id,
-      salida_programada_id, // id de la salida concreta
+      salida_programada_id,
       numero_personas,
       notas,
     } = req.body;
 
+    const numPersonas = Number(numero_personas);
+
     // 3) Validación mínima
-    if (!tour_id || !salida_programada_id || !numero_personas) {
+    if (!tour_id || !salida_programada_id || !numPersonas) {
       return res.status(400).json({ message: "Faltan campos obligatorios" });
     }
-
-    const numPersonas = Number(numero_personas);
-    const salidaId = Number(salida_programada_id);
-    const tourIdBody = Number(tour_id);
 
     if (numPersonas <= 0) {
       return res
@@ -164,86 +162,66 @@ export const createReserva = async (req: Request, res: Response) => {
         .json({ message: "El número de personas debe ser mayor que 0." });
     }
 
-    // 4) Leer la salida programada para comprobar plazas y tour asociado
+    // 4) Comprobar salida y plazas libres
     const salida = await prisma.salidas_programadas.findUnique({
-      where: { id: salidaId },
-      select: {
-        id: true,
-        tour_id: true,
-        activo: true,
-        plazas_totales: true,
-        plazas_ocupadas: true,
-      },
+      where: { id: Number(salida_programada_id) },
     });
 
-    if (!salida || salida.activo === false) {
-      return res
-        .status(404)
-        .json({ message: "La salida seleccionada no existe o no está activa." });
-    }
-
-    // Si se manda un tour_id que no coincide con la salida, rechazamos
-    if (salida.tour_id !== tourIdBody) {
+    if (!salida || !salida.activo) {
       return res.status(400).json({
-        message: "La salida seleccionada no pertenece al tour indicado.",
+        message: "La salida seleccionada no está disponible.",
       });
     }
 
-    const plazasTotales = salida.plazas_totales ?? 0;
-    const plazasOcupadas = salida.plazas_ocupadas ?? 0;
-    const plazasLibres = plazasTotales - plazasOcupadas;
-
-    if (plazasTotales <= 0) {
-      return res.status(400).json({
-        message:
-          "Esta salida no tiene un cupo configurado. Contacta con nosotros para reservar.",
-      });
-    }
+    const plazasLibres =
+      salida.plazas_totales - salida.plazas_ocupadas;
 
     if (plazasLibres <= 0) {
       return res.status(400).json({
-        message: "Esta salida ya no tiene plazas libres. Elige otra fecha.",
+        message: "Esta salida ya no tiene plazas disponibles.",
       });
     }
 
     if (numPersonas > plazasLibres) {
       return res.status(400).json({
-        message: `Solo quedan ${plazasLibres} plazas libres para esta salida.`,
+        message: `No hay plazas suficientes. Quedan solo ${plazasLibres} plazas libres.`,
       });
     }
 
-    // 5) Actualizar plazas_ocupadas y crear la reserva
-    //    (no usamos transacción compleja, pero para tu escala es suficiente)
-    await prisma.salidas_programadas.update({
-      where: { id: salidaId },
-      data: {
-        plazas_ocupadas: plazasOcupadas + numPersonas,
-      },
-    });
-
-    const nuevaReserva = await prisma.reservas.create({
-      data: {
-        usuario_id: Number(usuarioId),
-        tour_id: tourIdBody,
-        salida_programada_id: salidaId,
-        numero_personas: numPersonas,
-        notas: notas ?? null,
-      },
-      include: {
-        usuario: true,
-        salidas_programadas: {
-          include: {
-            tours: true,
+    // 5) Transacción: actualizar plazas_ocupadas + crear reserva
+    const [, nuevaReserva] = await prisma.$transaction([
+      prisma.salidas_programadas.update({
+        where: { id: salida.id },
+        data: {
+          plazas_ocupadas: {
+            increment: numPersonas,
           },
         },
-      },
-    });
+      }),
+      prisma.reservas.create({
+        data: {
+          usuario_id: Number(usuarioId),
+          tour_id: Number(tour_id),
+          salida_programada_id: Number(salida_programada_id),
+          numero_personas: numPersonas,
+          notas: notas ?? null,
+        },
+        include: {
+          usuario: true,
+          salidas_programadas: {
+            include: {
+              tours: true,
+            },
+          },
+        },
+      }),
+    ]);
 
-    // 6) Emails
+    // 6) Emails (igual que antes)
     const reservaConRelaciones = nuevaReserva as any;
     const usuario = reservaConRelaciones.usuario;
-    const salidaRelacion = reservaConRelaciones.salidas_programadas;
-    const tour = salidaRelacion?.tours;
+    const salidaRes = reservaConRelaciones.salidas_programadas;
+    const tour = salidaRes?.tours;
     const fecha = nuevaReserva.fecha;
 
     if (usuario && tour) {
@@ -253,8 +231,7 @@ export const createReserva = async (req: Request, res: Response) => {
         html: `
           <h2>¡Hola ${usuario.nombre}!</h2>
           <p>Tu reserva para el tour <b>${tour.titulo}</b> ha sido registrada.</p>
-          <p>Estado actual: <b>${nuevaReserva.estado}</b></p>
-          <p>Fecha de la solicitud: <b>${new Date(
+          <p>Fecha de la reserva: <b>${new Date(
             fecha
           ).toLocaleDateString()}</b></p>
           <hr/>
@@ -269,7 +246,7 @@ export const createReserva = async (req: Request, res: Response) => {
       html: `
         <p>El usuario <b>${usuario?.nombre}</b> ha reservado el tour <b>${tour?.titulo}</b>.</p>
         <p>Número de personas: ${numPersonas}</p>
-        <p>Fecha de solicitud: ${new Date(fecha).toLocaleString()}</p>
+        <p>Fecha: ${new Date(fecha).toLocaleString()}</p>
       `,
     });
 
@@ -285,6 +262,72 @@ export const createReserva = async (req: Request, res: Response) => {
     });
   }
 };
+
+/**
+ * ====================================
+ *  ACTUALIZAR ESTADO DE UNA RESERVA (admin)
+ *  PATCH /api/reservas/:id/estado
+ *  Body: { estado: "pendiente" | "confirmada" | "cancelada" }
+ * ====================================
+ */
+export const updateReservaEstado = async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+    const { estado } = req.body as { estado?: string };
+
+    if (!estado) {
+      return res
+        .status(400)
+        .json({ message: "Debe indicar un estado nuevo." });
+    }
+
+    // Tipo del enum de Prisma
+    type EstadoReserva = (typeof estado_reserva)[keyof typeof estado_reserva];
+
+    const estadosValidos: EstadoReserva[] = [
+      estado_reserva.pendiente,
+      estado_reserva.confirmada,
+      estado_reserva.cancelada,
+    ];
+
+    // Comprobamos que el string recibido es uno de los del enum
+    if (!estadosValidos.includes(estado as EstadoReserva)) {
+      return res.status(400).json({
+        message: `Estado inválido. Debe ser uno de: ${estadosValidos.join(
+          ", "
+        )}.`,
+      });
+    }
+
+    const estadoEnum = estado as EstadoReserva;
+
+    const reservaActualizada = await prisma.reservas.update({
+      where: { id: Number(id) },
+      data: { estado: estadoEnum }, // 👈 aquí ya es del tipo correcto
+      include: {
+        usuario: true,
+        salidas_programadas: {
+          include: {
+            tours: true,
+          },
+        },
+      },
+    });
+
+    return res.json({
+      message: "Estado de la reserva actualizado correctamente",
+      reserva: reservaActualizada,
+    });
+  } catch (error) {
+    console.error("❌ Error al actualizar el estado de la reserva:", error);
+    return res.status(500).json({
+      message: "Error al actualizar el estado de la reserva",
+      error: (error as Error).message,
+    });
+  }
+};
+
+
 
 /**
  * ====================================

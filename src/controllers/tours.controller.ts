@@ -208,10 +208,25 @@ export const getTourById = async (req: Request, res: Response) => {
     const tour = await prisma.tours.findUnique({
       where: { id },
       include: {
-        salidas_programadas: true, // incluye las salidas
+        // ⬇️ Solo salidas activas y con los campos que usa el frontend
+        salidas_programadas: {
+          where: { activo: true },
+          orderBy: { fecha_inicio: "asc" },
+          select: {
+            id: true,
+            fecha_inicio: true,
+            plazas_totales: true,
+            plazas_ocupadas: true,
+          },
+        },
+        // ⬇️ Reseñas con nombre de usuario
         resenas: {
           include: {
-            usuario: true, // solo si tienes relación con usuarios
+            usuario: {
+              select: {
+                nombre: true,
+              },
+            },
           },
         },
       },
@@ -221,7 +236,6 @@ export const getTourById = async (req: Request, res: Response) => {
       return res.status(404).json({ message: "Tour no encontrado" });
     }
 
-    // Opcional: mapear a la forma exacta que usa el frontend
     const respuesta = {
       id: tour.id,
       titulo: tour.titulo,
@@ -234,25 +248,27 @@ export const getTourById = async (req: Request, res: Response) => {
       dificultad: tour.dificultad,
       cupo_maximo: tour.cupo_maximo,
       imagen_url: tour.imagen_url,
-      salidas_programadas: tour.salidas_programadas,
-      resenas: tour.resenas.map((r: any) => ({
-      id: r.id,
-      usuario_nombre: r.usuario?.nombre ?? "Viajero",
-      comentario: r.comentario,
-      puntuacion: r.puntuacion,
-      creado_en: r.creado_en, // o el campo real que tengas
-      })),
 
+      // 👇 Ya vienen con id, fecha_inicio, plazas_totales, plazas_ocupadas
+      salidas_programadas: tour.salidas_programadas,
+
+      // 👇 Adaptamos reseñas al shape del frontend
+      resenas: tour.resenas.map((r: any) => ({
+        id: r.id,
+        usuario_nombre: r.usuario?.nombre ?? "Viajero",
+        comentario: r.comentario,
+        puntuacion: r.puntuacion,
+        creado_en: r.creado_en,
+      })),
     };
 
     res.json(respuesta);
   } catch (error) {
     console.error("Error getTourById:", error);
-    res
-      .status(500)
-      .json({ message: "Error al obtener el tour" });
+    res.status(500).json({ message: "Error al obtener el tour" });
   }
 };
+
 
 // ✅ Crear un nuevo tour
 export const createTourBasic = async (req: Request, res: Response) => {
