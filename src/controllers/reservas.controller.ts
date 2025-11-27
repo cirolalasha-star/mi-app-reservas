@@ -40,6 +40,7 @@ export const getReservas = async (_req: Request, res: Response) => {
   }
 };
 
+
 /**
  * ====================================
  *  GET RESERVA POR ID
@@ -113,6 +114,84 @@ export const getMisReservas = async (req: Request, res: Response) => {
     return res
       .status(500)
       .json({ message: "Error al obtener tus reservas" });
+  }
+};
+
+
+// 🔹 Estadísticas: reservas agrupadas por experiencia (solo admin)
+export const getReservasPorExperienciaAdmin = async (
+  req: Request,
+  res: Response
+) => {
+  try {
+    const authHeader = req.headers.authorization;
+    const tokenHeader =
+      authHeader && authHeader.startsWith("Bearer ")
+        ? authHeader.split(" ")[1]
+        : null;
+
+    const tokenCookie = (req as any).cookies?.token as string | undefined;
+    const token = tokenHeader || tokenCookie;
+
+    if (!token) {
+      return res.status(401).json({ message: "No autenticado." });
+    }
+
+    const decoded = jwt.verify(token, JWT_SECRET) as TokenPayload;
+
+    if (decoded.rol !== "admin") {
+      return res.status(403).json({ message: "No autorizado (solo admin)." });
+    }
+
+    // Traemos las reservas con la info del tour
+    const reservas = await prisma.reservas.findMany({
+      include: {
+        salidas_programadas: {
+          include: { tours: true },
+        },
+      },
+    });
+
+    type Estat = {
+      tour_id: number;
+      titulo: string;
+      ubicacion: string | null;
+      reservas: number;
+      personas: number;
+    };
+
+    const mapa = new Map<number, Estat>();
+
+    for (const r of reservas as any[]) {
+      const tour = r.salidas_programadas?.tours;
+      if (!tour) continue;
+
+      const key = tour.id as number;
+
+      const actual = mapa.get(key) ?? {
+        tour_id: key,
+        titulo: tour.titulo,
+        ubicacion: tour.ubicacion ?? null,
+        reservas: 0,
+        personas: 0,
+      };
+
+      actual.reservas += 1;
+      actual.personas += r.numero_personas ?? 0;
+
+      mapa.set(key, actual);
+    }
+
+    const resultado = Array.from(mapa.values()).sort(
+      (a, b) => b.reservas - a.reservas
+    );
+
+    return res.json(resultado);
+  } catch (error) {
+    console.error("❌ Error en getReservasPorExperienciaAdmin:", error);
+    return res.status(500).json({
+      message: "Error al obtener estadísticas de reservas por experiencia",
+    });
   }
 };
 
@@ -344,5 +423,90 @@ export const deleteReserva = async (req: Request, res: Response) => {
   } catch (error) {
     console.error("❌ Error al eliminar la reserva:", error);
     return res.status(500).json({ message: "Error al eliminar la reserva" });
+  }
+};
+/**
+ * ====================================
+ *  GET RESERVAS (ADMIN)
+ *  GET /api/reservas/admin
+ * ====================================
+ */
+export const getReservasAdmin = async (_req: Request, res: Response) => {
+  try {
+    const reservas = await prisma.reservas.findMany({
+      include: {
+        usuario: true,
+        salidas_programadas: {
+          include: {
+            tours: true,
+          },
+        },
+      },
+      orderBy: { fecha: "desc" },
+    });
+
+    return res.json(reservas);
+  } catch (error) {
+    console.error("❌ Error en getReservasAdmin:", error);
+    return res
+      .status(500)
+      .json({ message: "Error al obtener las reservas (admin)" });
+  }
+};
+
+/**
+ * ==============================================
+ *  RESUMEN RESERVAS POR EXPERIENCIA (ADMIN)
+ *  GET /api/reservas/resumen-por-experiencia
+ * ==============================================
+ */
+export const getResumenReservasPorExperiencia = async (
+  _req: Request,
+  res: Response
+) => {
+  try {
+    const resumenRaw = await prisma.reservas.groupBy({
+      by: ["tour_id"],
+      _count: { _all: true },
+      _sum: { numero_personas: true },
+    });
+
+    // IDs de tours (quitando nulls)
+    const tourIds = resumenRaw
+      .map((r) => r.tour_id)
+      .filter((id): id is number => id !== null);
+
+    // Info básica de los tours
+    const tours = await prisma.tours.findMany({
+      where: { id: { in: tourIds } },
+      select: {
+        id: true,
+        titulo: true,
+        ubicacion: true,
+      },
+    });
+
+    const mapaTours = new Map(tours.map((t) => [t.id, t]));
+
+    const resultado = resumenRaw
+      .filter((r) => r.tour_id !== null)
+      .map((r) => {
+        const tour = mapaTours.get(r.tour_id as number);
+        return {
+          tour_id: r.tour_id,
+          titulo: tour?.titulo ?? "Sin título",
+          ubicacion: tour?.ubicacion ?? null,
+          reservas: r._count._all,
+          personas: r._sum.numero_personas ?? 0,
+        };
+      });
+
+    return res.json(resultado);
+  } catch (error) {
+    console.error("❌ Error en getResumenReservasPorExperiencia:", error);
+    return res.status(500).json({
+      message:
+        "Error al obtener el resumen de reservas por experiencia",
+    });
   }
 };

@@ -1,10 +1,16 @@
-import { Router } from 'express'
-import { getStats } from '../controllers/stats.controller'
-import { adminAuth } from '../middleware/adminAuth'
+// src/routes/stats.routes.ts
+import { Router } from "express";
+import { protegerRuta, soloAdmin } from "../middleware/auth.middleware";
+import { getReservasPorTour } from "../controllers/stats.controller";
 
-const router = Router()
+const router = Router();
 
-// 📊 Ruta principal para obtener todas las estadísticas
-router.get('/', adminAuth, getStats)
+/**
+ * Todas las rutas de aquí cuelgan de:
+ *   /api/admin/stats   (según tu app.ts)
+ */
 
-export default router
+// 📊 Reservas agrupadas por experiencia (solo admin)
+router.get("/reservas-por-tour", protegerRuta, soloAdmin, getReservasPorTour);
+
+export default router;

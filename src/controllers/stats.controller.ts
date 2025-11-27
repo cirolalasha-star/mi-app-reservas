@@ -1,83 +1,93 @@
-import { PrismaClient } from '@prisma/client'
-import { Request, Response } from 'express'
+// src/controllers/stats.controller.ts
+import { PrismaClient } from "@prisma/client";
+import { Request, Response } from "express";
 
-const prisma = new PrismaClient()
+const prisma = new PrismaClient();
 
-// 📊 Estadísticas generales del sistema
-export const getStats = async (_req: Request, res: Response) => {
+/**
+ * GET /api/admin/stats/reservas-por-tour
+ *
+ * Devuelve métricas agregadas por experiencia (tour):
+ * - total de reservas
+ * - total de personas
+ * - reservas por estado (pendiente / confirmada / cancelada)
+ */
+export const getReservasPorTour = async (_req: Request, res: Response) => {
   try {
-    // 1️⃣ Total de usuarios
-    const totalUsuarios = await prisma.usuarios.count()
-
-    // 2️⃣ Total de reservas
-    const totalReservas = await prisma.reservas.count()
-
-    // 3️⃣ Total de tours disponibles
-    const totalTours = await prisma.tours.count()
-
-    // 4️⃣ Tours más populares (por número de reservas)
-    const topTours = await prisma.tours.findMany({
-      take: 5, // los 5 más reservados
-      orderBy: { reservas: { _count: 'desc' } },
-      include: {
-        _count: { select: { reservas: true } },
-        tour_categorias: { include: { categorias: true } },
+    // 1) Sacamos todas las reservas (solo campos que nos interesan)
+    const reservas = await prisma.reservas.findMany({
+      select: {
+        tour_id: true,
+        numero_personas: true,
+        estado: true,
       },
-    })
+    });
 
-    // 5️⃣ Ganancias estimadas (suma de precios base de tours reservados)
-    const ingresos = await prisma.reservas.findMany({
-      include: { tour: true },
-    })
+    // 2) Sacamos todos los tours (para título y ubicación)
+    const tours = await prisma.tours.findMany({
+      select: {
+        id: true,
+        titulo: true,
+        ubicacion: true,
+      },
+    });
 
-    const totalIngresos = ingresos.reduce(
-      (acc, r) => acc + (Number(r.tour?.precio_base) || 0),
-      0
-    )
+    // 3) Mapa base por tour
+    const mapa = new Map<
+      number,
+      {
+        tour_id: number;
+        titulo: string;
+        ubicacion: string | null;
+        total_reservas: number;
+        total_personas: number;
+        pendientes: number;
+        confirmadas: number;
+        canceladas: number;
+      }
+    >();
 
-    // 6️⃣ Reservas por mes (últimos 6 meses)
-    const reservasMensuales = await prisma.$queryRaw<
-      { mes: string; total: number }[]
-    >`
-      SELECT
-        TO_CHAR(fecha, 'YYYY-MM') AS mes,
-        COUNT(*)::int AS total
-      FROM reservas
-      GROUP BY mes
-      ORDER BY mes DESC
-      LIMIT 6;
-    `
+    for (const t of tours) {
+      mapa.set(t.id, {
+        tour_id: t.id,
+        titulo: t.titulo,
+        ubicacion: t.ubicacion,
+        total_reservas: 0,
+        total_personas: 0,
+        pendientes: 0,
+        confirmadas: 0,
+        canceladas: 0,
+      });
+    }
 
-    // 7️⃣ Promedio de reservas por usuario
-    const promedioReservas = totalReservas / (totalUsuarios || 1)
+    // 4) Recorremos reservas y vamos sumando
+    for (const r of reservas) {
+      if (!r.tour_id) continue;
 
-    // 8️⃣ Tours sin reservas
-    const toursSinReservas = await prisma.tours.findMany({
-      where: { reservas: { none: {} } },
-      select: { id: true, titulo: true },
-    })
+      const stats = mapa.get(r.tour_id);
+      if (!stats) continue;
 
-    // 9️⃣ Usuarios más activos (más reservas)
-    const usuariosActivos = await prisma.usuarios.findMany({
-      take: 3,
-      orderBy: { reservas: { _count: 'desc' } },
-      include: { _count: { select: { reservas: true } } },
-    })
+      const personas = Number(r.numero_personas ?? 0);
+      const estado = (r.estado || "").toLowerCase();
 
-    // ✅ Respuesta final completa
-    res.json({
-      totalUsuarios,
-      totalReservas,
-      totalTours,
-      totalIngresos,
-      promedioReservas,
-      reservasMensuales,
-      topTours,
-      toursSinReservas,
-      usuariosActivos,
-    })
+      stats.total_reservas += 1;
+      stats.total_personas += isNaN(personas) ? 0 : personas;
+
+      if (estado === "pendiente") stats.pendientes += 1;
+      else if (estado === "confirmada") stats.confirmadas += 1;
+      else if (estado === "cancelada") stats.canceladas += 1;
+    }
+
+    // 5) Solo devolvemos tours que tengan al menos 1 reserva
+    const resultado = Array.from(mapa.values()).filter(
+      (t) => t.total_reservas > 0
+    );
+
+    return res.json(resultado);
   } catch (error) {
-    console.error("❌ Error en getStats:", error)
-    res.status(500).json({ message: 'Error al obtener estadísticas' })
+    console.error("❌ Error en getReservasPorTour:", error);
+    return res.status(500).json({
+      message: "Error al obtener estadísticas de reservas por experiencia",
+    });
   }
-}
+};

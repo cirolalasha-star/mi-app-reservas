@@ -7,33 +7,53 @@ import {
   createReserva,
   deleteReserva,
   updateReservaEstado,
+  getReservasAdmin,
+  getResumenReservasPorExperiencia,
 } from "../controllers/reservas.controller";
 import { protegerRuta, soloAdmin } from "../middleware/auth.middleware";
 
 const router = Router();
 
 /**
- * Orden MUY importante:
- * - Primero rutas "especiales" como /mias
- * - Luego las genéricas con parámetros (/:id)
+ * 🛡 Rutas ADMIN
+ * (protegerRuta añade req.usuario, soloAdmin comprueba rol === "admin")
  */
 
-// 👤 Reservas del usuario logado
+// Lista completa de reservas para admin
+router.get("/admin", protegerRuta, soloAdmin, getReservasAdmin);
+
+// Resumen de reservas agrupadas por experiencia
+router.get(
+  "/resumen-por-experiencia",
+  protegerRuta,
+  soloAdmin,
+  getResumenReservasPorExperiencia
+);
+
+/**
+ * 👤 Reservas del usuario logado
+ */
 router.get("/mias", protegerRuta, getMisReservas);
 
-// 📋 Listado general (solo admin, para el panel)
-router.get("/", protegerRuta, soloAdmin, getReservas);
+/**
+ * 📦 Listado general
+ */
+router.get("/", getReservas);
 
-// 🔎 Detalle por id (también solo admin)
-router.get("/:id", protegerRuta, soloAdmin, getReservaById);
+/**
+ * 🔎 Detalle por ID
+ */
+router.get("/:id", getReservaById);
 
-// ➕ Crear reserva (usuario logado)
-router.post("/", protegerRuta, createReserva);
-
-// 🔁 Cambiar estado de una reserva (pendiente/confirmada/cancelada) – solo admin
+/**
+ * ✏️ Cambiar estado de una reserva (solo admin)
+ */
 router.patch("/:id/estado", protegerRuta, soloAdmin, updateReservaEstado);
 
-// 🗑 Eliminar reserva (solo admin)
-router.delete("/:id", protegerRuta, soloAdmin, deleteReserva);
+/**
+ * ➕ Crear / ❌ Borrar reservas (usuario autenticado)
+ */
+router.post("/", protegerRuta, createReserva);
+router.delete("/:id", protegerRuta, deleteReserva);
 
 export default router;

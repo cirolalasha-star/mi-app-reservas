@@ -1,16 +1,9 @@
-// src/middlewares/auth.middleware.ts
-/**
- * Middleware de autenticación:
- *  - Lee el token JWT desde:
- *      · Authorization: Bearer xxx
- *      · o cookie "token"
- *  - Si es válido, añade `req.usuarioId` y `req.usuarioRol`
- *  - Si no, responde 401 (no autenticado)
- */
-
-import type { Request, Response, NextFunction } from "express";
+// src/middleware/auth.middleware.ts
+import { NextFunction, Response, Request } from "express";
 import jwt from "jsonwebtoken";
+import { PrismaClient } from "@prisma/client";
 
+const prisma = new PrismaClient();
 const JWT_SECRET = process.env.JWT_SECRET || "CAMBIAR_SECRET_EN_PRODUCCION";
 
 interface TokenPayload {
@@ -20,67 +13,67 @@ interface TokenPayload {
   exp: number;
 }
 
-// 🔧 Extendemos el tipo Request para guardar los datos del usuario
-declare module "express-serve-static-core" {
-  interface Request {
-    usuarioId?: number;
-    usuarioRol?: string;
-  }
+export interface AuthRequest extends Request {
+  usuario?: {
+    id: number;
+    rol: string;
+  };
 }
 
-export function protegerRuta(req: Request, res: Response, next: NextFunction) {
+// ✔ Middleware general: comprueba token y añade req.usuario
+export const protegerRuta = async (
+  req: AuthRequest,
+  res: Response,
+  next: NextFunction
+) => {
   try {
-    let token: string | undefined;
-
-    // 1) Intentamos leer Authorization: Bearer xxx
     const authHeader = req.headers.authorization;
-    if (authHeader?.startsWith("Bearer ")) {
-      token = authHeader.substring(7);
-    }
+    const tokenHeader =
+      authHeader && authHeader.startsWith("Bearer ")
+        ? authHeader.split(" ")[1]
+        : null;
 
-    // 2) Si no hay header, probamos con cookie "token"
-    if (!token && (req as any).cookies?.token) {
-      token = (req as any).cookies.token;
-    }
+    const tokenCookie = (req as any).cookies?.token as string | undefined;
+    const token = tokenHeader || tokenCookie;
 
     if (!token) {
-      return res.status(401).json({ message: "No autenticado. Falta token." });
+      return res.status(401).json({ message: "No autenticado." });
     }
 
-    // 3) Verificamos token
     const decoded = jwt.verify(token, JWT_SECRET) as TokenPayload;
 
-    // 4) Guardamos info en req para usarla en los controladores
-    req.usuarioId = decoded.id;
-    req.usuarioRol = decoded.rol;
+    // Comprobamos usuario real y rol
+    const usuario = await prisma.usuarios.findUnique({
+      where: { id: decoded.id },
+      select: { id: true, rol: true },
+    });
 
-    return next();
+    if (!usuario) {
+      return res.status(401).json({ message: "Usuario no encontrado." });
+    }
+
+    req.usuario = { id: usuario.id, rol: usuario.rol };
+    next();
   } catch (error) {
     console.error("❌ Error en protegerRuta:", error);
-    return res.status(401).json({ message: "Token inválido o expirado." });
+    return res.status(401).json({ message: "Token inválido o caducado." });
   }
-}
-/**
- * Middleware para proteger rutas (probablemente ya lo tienes)
- * export const protegerRuta = ...
- */
+};
 
-/**
- * 🔐 SOLO ADMIN
- * Debe ir después de protegerRuta en las rutas:
- *   router.get("/algo", protegerRuta, soloAdmin, handler)
- */
-export const soloAdmin = (req: Request, res: Response, next: NextFunction) => {
-  const usuario = (req as any).usuario;
-
-  if (!usuario) {
+// ✔ Solo deja pasar a admins
+export const soloAdmin = (
+  req: AuthRequest,
+  res: Response,
+  next: NextFunction
+) => {
+  if (!req.usuario) {
     return res.status(401).json({ message: "No autenticado." });
   }
 
-  if (usuario.rol !== "admin") {
+  if (req.usuario.rol !== "admin") {
     return res
       .status(403)
-      .json({ message: "Acceso reservado a administradores." });
+      .json({ message: "Acceso restringido a administradores." });
   }
 
   return next();
