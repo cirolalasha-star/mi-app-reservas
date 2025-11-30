@@ -40,7 +40,8 @@ const allowedOrigins = [
 // ✅ Config más simple y robusta
 const corsOptions: CorsOptions = {
   origin: allowedOrigins,                       // Deja pasar solo estos orígenes
-  methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+  // 👇 IMPORTANTE: añadimos PATCH
+  methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
   allowedHeaders: ["Content-Type", "Authorization"],
   credentials: true,                            // Permite cookies/credenciales
 };
